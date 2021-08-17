@@ -360,7 +360,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             # hasn't told us otherwise
 
             if self.ops.dbms_type == 'tibero':
-                cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SSSSS'")
+                cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'")
                 cursor.execute("ALTER SESSION SET NLS_DATE_LANGUAGE = 'american'")
             elif not self.ops.is_db2 and not self.ops.is_openedge:
                 # IBM's DB2 doesn't support this syntax and a suitable

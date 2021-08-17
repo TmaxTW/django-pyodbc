@@ -26,6 +26,7 @@ Features
 * [x] Django's TextField both under SQL Server 2000 and 2005.
 * [x] Passes most of the tests of the Django test suite.
 * [x] Compatible with SQL Server and SQL Server Native Client from Microsoft (Windows) and FreeTDS ODBC drivers (Linux).
+* [x] Support for Tibero 6
 
 TODO
 --------
