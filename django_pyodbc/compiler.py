@@ -233,7 +233,7 @@ class SQLCompiler(compiler.SQLCompiler):
 
         # Check for high mark only and replace with "TOP"
         if self.query.high_mark is not None and not self.query.low_mark:
-            if self.connection.ops.is_db2:
+            if self.connection.ops.is_db2 or self.connction.ops.dbms_type == 'tibero':
                 sql = self._select_top('', raw_sql, self.query.high_mark)
             else:
                 _select = 'SELECT'
@@ -284,7 +284,7 @@ class SQLCompiler(compiler.SQLCompiler):
         # SQL Server 2000 doesn't support the `ROW_NUMBER()` function, thus it
         # is necessary to use the `TOP` construct with `ORDER BY` so we can
         # slice out a particular range of results.
-        if self.connection.ops.sql_server_ver < 2005 and not self.connection.ops.is_db2:
+        if self.connection.ops.sql_server_ver < 2005 and not self.connection.ops.is_db2 and not self.connection.ops.dbms_type == 'tibero':
             num_to_select = self.query.high_mark - self.query.low_mark
             order_by_col_with_prefix,order_direction = order.rsplit(' ',1)
             order_by_col = order_by_col_with_prefix.rsplit('.',1)[-1]

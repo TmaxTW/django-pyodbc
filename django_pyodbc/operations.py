@@ -73,9 +73,17 @@ class DatabaseOperations(BaseDatabaseOperations):
         self._ss_ver = None
         self._ss_edition = None
         self._is_db2 = None
+        self._dbms_type = None
         self._is_openedge = None
         self._left_sql_quote = None
         self._right_sql_quote = None
+
+    @property
+    def dbms_type(self):
+        if self._dbms_type is None:
+            options = self.connection.settings_dict.get('OPTIONS', {})
+            self._dbms_type = options.get('dbms_type', 'mssql')
+        return self._dbms_type
 
     @property
     def is_db2(self):
@@ -129,7 +137,10 @@ class DatabaseOperations(BaseDatabaseOperations):
             return self._ss_ver
         cur = self.connection.cursor()
         ver_code = None
-        if not self.is_db2 and not self.is_openedge:
+        if self.dbms_type == 'tibero':
+            cur.execute("select value from v$version where name = 'PRODUCT_MAJOR'")
+            ver_code = int(cur.fetchone()[0])
+        elif not self.is_db2 and not self.is_openedge:
             cur.execute("SELECT CAST(SERVERPROPERTY('ProductVersion') as varchar)")
             ver_code = cur.fetchone()[0]
             ver_code = int(ver_code.split('.')[0])

@@ -359,7 +359,10 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             # Django convention for the 'week_day' Django lookup) if the user
             # hasn't told us otherwise
 
-            if not self.ops.is_db2 and not self.ops.is_openedge:
+            if self.ops.dbms_type == 'tibero':
+                cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SSSSS'")
+                cursor.execute("ALTER SESSION SET NLS_DATE_LANGUAGE = 'american'")
+            elif not self.ops.is_db2 and not self.ops.is_openedge:
                 # IBM's DB2 doesn't support this syntax and a suitable
                 # equivalent could not be found.
                 cursor.execute("SET DATEFORMAT ymd; SET DATEFIRST %s" % self.datefirst)
