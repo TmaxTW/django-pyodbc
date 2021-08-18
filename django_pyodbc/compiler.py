@@ -233,7 +233,7 @@ class SQLCompiler(compiler.SQLCompiler):
 
         # Check for high mark only and replace with "TOP"
         if self.query.high_mark is not None and not self.query.low_mark:
-            if self.connection.ops.is_db2 or self.connction.ops.dbms_type == 'tibero':
+            if self.connection.ops.is_db2 or self.connection.ops.dbms_type == 'tibero':
                 sql = self._select_top('', raw_sql, self.query.high_mark)
             else:
                 _select = 'SELECT'
@@ -337,6 +337,9 @@ class SQLCompiler(compiler.SQLCompiler):
 
     def _select_top(self,select,inner_sql,number_to_fetch):
         if self.connection.ops.is_db2:
+            return "{select} {inner_sql} FETCH FIRST {number_to_fetch} ROWS ONLY".format(
+                select=select, inner_sql=inner_sql, number_to_fetch=number_to_fetch)
+        elif self.connection.ops.dbms_type == 'tibero':
             return "{select} {inner_sql} FETCH FIRST {number_to_fetch} ROWS ONLY".format(
                 select=select, inner_sql=inner_sql, number_to_fetch=number_to_fetch)
         else:

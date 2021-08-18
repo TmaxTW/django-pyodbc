@@ -55,6 +55,8 @@ except ImportError:
 
 class DataTypesWrapper(dict):
     def __getitem__(self, item):
+        # TODO - To be fixed, currently workaround by return directly
+        return super(DataTypesWrapper, self).__getitem__(item)
         if item in ('PositiveIntegerField', 'PositiveSmallIntegerField'):
             # The check name must be unique for the database. Add a random
             # component so the regresion tests don't complain about duplicate names
@@ -72,6 +74,37 @@ class DatabaseCreation(BaseDatabaseCreation):
     #
     # Any format strings starting with "qn_" are quoted before being used in the
     # output (the "qn_" prefix is stripped before the lookup is performed.
+
+    tibero_data_types = DataTypesWrapper({
+        'AutoField': 'NUMBER(11) GENERATED ALWAYS AS IDENTITY',
+        'BigAutoField': 'NUMBER(19) GENERATED ALWAYS AS IDENTITY',
+        'BinaryField': 'BLOB',
+        'BooleanField': 'NUMBER(1)',
+        'CharField': 'NVARCHAR2(%(max_length)s)',
+        'DateField': 'DATE',
+        'DateTimeField': 'TIMESTAMP',
+        'DecimalField': 'NUMBER(%(max_digits)s, %(decimal_places)s)',
+        'DurationField': 'INTERVAL DAY(9) TO SECOND(6)',
+        'FileField': 'NVARCHAR2(%(max_length)s)',
+        'FilePathField': 'NVARCHAR2(%(max_length)s)',
+        'FloatField': 'DOUBLE PRECISION',
+        'IntegerField': 'NUMBER(11)',
+        'JSONField': 'NCLOB',
+        'BigIntegerField': 'NUMBER(19)',
+        'IPAddressField': 'VARCHAR2(15)',
+        'GenericIPAddressField': 'VARCHAR2(39)',
+        'OneToOneField': 'NUMBER(11)',
+        'PositiveBigIntegerField': 'NUMBER(19)',
+        'PositiveIntegerField': 'NUMBER(11)',
+        'PositiveSmallIntegerField': 'NUMBER(11)',
+        'SlugField': 'NVARCHAR2(%(max_length)s)',
+        'SmallAutoField': 'NUMBER(5) GENERATED ALWAYS AS IDENTITY',
+        'SmallIntegerField': 'NUMBER(11)',
+        'TextField': 'NCLOB',
+        'TimeField': 'TIMESTAMP',
+        'URLField': 'VARCHAR2(%(max_length)s)',
+        'UUIDField': 'VARCHAR2(32)',
+    })
 
     data_types = DataTypesWrapper({
         'AutoField':                    'int IDENTITY (1, 1)',

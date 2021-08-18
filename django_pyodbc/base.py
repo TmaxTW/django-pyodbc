@@ -60,6 +60,8 @@ from django_pyodbc.compat import binary_type, text_type, timezone
 from django_pyodbc.creation import DatabaseCreation
 from django_pyodbc.introspection import DatabaseIntrospection
 from django_pyodbc.operations import DatabaseOperations
+#from django_pyodbc.schema import DatabaseSchemaEditor
+from .schema import DatabaseSchemaEditor
 
 try:
     import pyodbc as Database
@@ -109,6 +111,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     #uses_savepoints = True
     allow_sliced_subqueries = False
     supports_paramstyle_pyformat = False
+    supports_boolean_expr_in_select_clause = True
 
     has_bulk_insert = False
     # DateTimeField doesn't support timezones, only DateTimeOffsetField
@@ -131,6 +134,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     unicode_results = False
     datefirst = 7
     Database = Database
+
     limit_table_list = False
 
     # Collations:       http://msdn2.microsoft.com/en-us/library/ms184391.aspx
@@ -169,6 +173,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     # In Django 1.8 data_types was moved from DatabaseCreation to DatabaseWrapper.
     # See https://docs.djangoproject.com/en/1.10/releases/1.8/#database-backend-api
+    SchemaEditorClass = DatabaseSchemaEditor
     data_types = DatabaseCreation.data_types
     features_class = DatabaseFeatures
     ops_class = DatabaseOperations
@@ -176,7 +181,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     creation_class = DatabaseCreation
     introspection_class = DatabaseIntrospection
     validation_class = BaseDatabaseValidation
-
+    _limited_data_types = None
 
     def __init__(self, *args, **kwargs):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
@@ -212,7 +217,72 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self.introspection = DatabaseIntrospection(self)
         self.validation = BaseDatabaseValidation(self)
         self.connection = None
-
+        if self.ops.dbms_type == 'tibero':
+            self.data_types = DatabaseCreation.tibero_data_types
+            self._limited_data_types = ('clob', 'nclob', 'blob')
+            self.features.uses_savepoints = False
+            self.features.supports_boolean_expr_in_select_clause = False
+            # Oracle crashes with "ORA-00932: inconsistent datatypes: expected - got
+            # BLOB" when grouping by LOBs (#24096).
+            self.features.allows_group_by_lob = False
+            self.features.interprets_empty_strings_as_nulls = True
+            self.features.has_select_for_update = True
+            self.features.has_select_for_update_nowait = True
+            self.features.has_select_for_update_skip_locked = True
+            self.features.has_select_for_update_of = True
+            self.features.select_for_update_of_column = True
+            self.features.can_return_columns_from_insert = False
+            self.features.supports_subqueries_in_group_by = False
+            self.features.ignores_unnecessary_order_by_in_subqueries = False
+            self.features.supports_transactions = True
+            self.features.supports_timezones = False
+            self.features.has_native_duration_field = True
+            self.features.can_defer_constraint_checks = True
+            self.features.supports_partially_nullable_unique_constraints = False
+            self.features.supports_deferrable_unique_constraints = True
+            self.features.truncates_names = True
+            self.features.supports_tablespaces = True
+            self.features.supports_sequence_reset = False
+            self.features.can_introspect_materialized_views = True
+            self.features.atomic_transactions = False
+            self.features.supports_combined_alters = False
+            self.features.nulls_order_largest = True
+            self.features.requires_literal_defaults = True
+            self.features.bare_select_suffix = " FROM DUAL"
+            # select for update with limit can be achieved on Oracle, but not with the current backend.
+            self.features.supports_select_for_update_with_limit = False
+            self.features.supports_temporal_subtraction = True
+            # Oracle doesn't ignore quoted identifiers case but the current backend
+            # does by uppercasing all identifiers.
+            self.features.ignores_table_name_case = True
+            self.features.supports_index_on_text_field = False
+            self.features.has_case_insensitive_like = False
+            self.features.create_test_procedure_without_params_sql = """
+                CREATE PROCEDURE "TEST_PROCEDURE" AS
+                V_I INTEGER;
+                BEGIN
+                V_I := 1;
+                END;
+            """
+            self.features.create_test_procedure_with_int_param_sql = """
+                CREATE PROCEDURE "TEST_PROCEDURE" (P_I INTEGER) AS
+                V_I INTEGER;
+                BEGIN
+                V_I := P_I;
+                END;
+            """
+            self.features.supports_callproc_kwargs = True
+            self.features.supports_over_clause = True
+            self.features.supports_frame_range_fixed_distance = True
+            self.features.supports_ignore_conflicts = False
+            self.features.max_query_params = 2**16 - 1
+            self.features.supports_partial_indexes = False
+            self.features.supports_slicing_ordering_in_compound = True
+            self.features.allows_multiple_constraints_on_same_fields = False
+            self.features.supports_boolean_expr_in_select_clause = False
+            self.features.supports_primitives_in_json_field = False
+            self.features.supports_json_field_contains = False
+            self.features.supports_collation_on_textfield = False
 
     def get_connection_params(self):
         settings_dict = self.settings_dict
@@ -360,13 +430,18 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             # hasn't told us otherwise
 
             if self.ops.dbms_type == 'tibero':
-                cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'")
-                cursor.execute("ALTER SESSION SET NLS_DATE_LANGUAGE = 'american'")
+                cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS';")
+                cursor.execute("ALTER SESSION SET NLS_DATE_LANGUAGE = 'american';")
+                cursor.execute("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'" +
+                        (" TIME_ZONE = 'UTC'" if settings.USE_TZ else ''))
+                self.connection.autocommit=True
+
             elif not self.ops.is_db2 and not self.ops.is_openedge:
                 # IBM's DB2 doesn't support this syntax and a suitable
                 # equivalent could not be found.
                 cursor.execute("SET DATEFORMAT ymd; SET DATEFIRST %s" % self.datefirst)
-            if self.ops.sql_server_ver < 2005:
+
+            if self.ops.dbms_type == "mssql" and self.ops.sql_server_ver < 2005:
                 self.creation.data_types['TextField'] = 'ntext'
                 self.data_types['TextField'] = 'ntext'
                 self.features.can_return_id_from_insert = False
@@ -403,6 +478,9 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             elif self.driver_supports_utf8 is None:
                 self.driver_supports_utf8 = (self.drv_name == 'SQLSRV32.DLL'
                                              or ms_sqlncli.match(self.drv_name))
+
+            if not self.connection.autocommit:
+                self.connection.commit()
 
         return CursorWrapper(cursor, self.driver_supports_utf8, self.encoding, self)
 
@@ -572,3 +650,12 @@ class CursorWrapper(object):
                 'sql': '-- RELEASE SAVEPOINT %s -- (because assertNumQueries)' % self.ops.quote_name(sid),
                 'time': '0.000',
             })
+
+    def commit(self):
+        if self.connection is not None:
+            return self.connection.commit()
+
+    def _commit(self):
+        if self.connection is not None:
+            return self.connection.commit()
+

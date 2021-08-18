@@ -55,7 +55,7 @@ except ImportError:
     # import location prior to Django 1.8
     from django.db.backends import BaseDatabaseOperations
 from django.utils.dateparse import parse_date, parse_time, parse_datetime
-
+from django.db.backends.utils import strip_quotes, truncate_name
 
 from django_pyodbc.compat import smart_text, string_types, timezone
 
@@ -110,6 +110,8 @@ class DatabaseOperations(BaseDatabaseOperations):
                 self._left_sql_quote = '{'
             elif self.is_openedge:
                 self._left_sql_quote = '"'
+            elif self.dbms_type == 'tibero':
+                self._left_sql_quote = '"'
             else:
                 self._left_sql_quote = '['
         return self._left_sql_quote
@@ -124,6 +126,8 @@ class DatabaseOperations(BaseDatabaseOperations):
             elif self.is_db2: 
                 self._right_sql_quote = '}'
             elif self.is_openedge:
+                self._right_sql_quote = '"'
+            elif self.dbms_type == 'tibero':
                 self._right_sql_quote = '"'
             else:
                 self._right_sql_quote = ']'
@@ -248,6 +252,27 @@ class DatabaseOperations(BaseDatabaseOperations):
         """
         return 'CONTAINS(%s, %%s)' % field_name
 
+    def _get_no_autofield_sequence_name(self, table):
+        """
+        Manually created sequence name to keep backward compatibility for
+        AutoFields that aren't Oracle identity columns.
+        """
+        name_length = self.max_name_length() - 3
+        return '%s_SQ' % truncate_name(strip_quotes(table), name_length).upper()
+
+    def _get_sequence_name(self, cursor, table, pk_name):
+        cursor.execute("""
+            SELECT data_default
+            FROM user_tab_cols
+            WHERE table_name = %s
+            AND column_name = %s""", [table, pk_name])
+        row = cursor.fetchone()
+        if row is None:
+            seq_name = None
+        else:
+            seq_name = row[0].split('.')[1]
+        return seq_name
+
     def last_insert_id(self, cursor, table_name, pk_name):
         """
         Given a cursor object that has just performed an INSERT statement into
@@ -272,7 +297,10 @@ class DatabaseOperations(BaseDatabaseOperations):
         # @@IDENTITY is not limited to a specific scope.
 
         table_name = self.quote_name(table_name)
-        if self._is_db2:
+        if self._dbms_type == 'tibero':
+            sq_name = self._get_sequence_name(cursor, strip_quotes(table_name), pk_name)
+            cursor.execute('SELECT "%s".currval FROM DUAL' % strip_quotes(sq_name))
+        elif self._is_db2:
             cursor.execute("SELECT CAST(IDENTITY_VAL_LOCAL() as bigint) from %s" % table_name)
         else:
             cursor.execute("SELECT py(IDENT_CURRENT(%s) as bigint)", [table_name])
@@ -510,6 +538,10 @@ class DatabaseOperations(BaseDatabaseOperations):
         if field and field.get_internal_type() == 'DateTimeField':
             if isinstance(value, string_types) and value:
                 value = parse_datetime(value)
+            return value
+        elif field and field.get_internal_type() == 'BooleanField':
+            if value in (0, 1):
+                value = bool(value)
             return value
         elif field and field.get_internal_type() == 'DateField':
             if isinstance(value, datetime.datetime):
