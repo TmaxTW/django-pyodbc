@@ -43,6 +43,7 @@ Installation
       
 2. Now you can now add a database to your settings using standard ODBC parameters.
 
+   * Microsoft SQL Server
    .. code:: python
 
       DATABASES = {
@@ -53,6 +54,24 @@ Installation
              'PASSWORD': "mssql_password",
              'NAME': "database_name",
              'OPTIONS': {
+                 'host_is_server': True
+             },
+         }
+      }
+
+   * TmaxSoft Tibero Database
+   .. code:: python
+
+      DATABASES = {
+         'default': {
+             'ENGINE': "django_pyodbc",
+             'HOST': "127.0.0.1,8629",
+             'NAME': "tibero",
+             'USER': "tibero",
+             'PASSWORD': "tmax",
+             'OPTIONS': {
+                 'driver': "Tibero",
+                 'dbms_type': "tibero",
                  'host_is_server': True
              },
          }
