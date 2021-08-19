@@ -261,11 +261,12 @@ class DatabaseOperations(BaseDatabaseOperations):
         return '%s_SQ' % truncate_name(strip_quotes(table), name_length).upper()
 
     def _get_sequence_name(self, cursor, table, pk_name):
+        # TODO - Currently workaround USER_TAB_IDENTITY_COLS issues. 
         cursor.execute("""
             SELECT data_default
             FROM user_tab_cols
-            WHERE table_name = %s
-            AND column_name = %s""", [table, pk_name])
+            WHERE UPPER(table_name) = UPPER(%s)
+            AND UPPER(column_name) = UPPER(%s)""", [table, pk_name])
         row = cursor.fetchone()
         if row is None:
             seq_name = None
@@ -327,8 +328,21 @@ class DatabaseOperations(BaseDatabaseOperations):
         Returns a quoted version of the given table, index or column name. Does
         not quote the given name if it's already been quoted.
         """
-        if name.startswith(self.left_sql_quote) and name.endswith(self.right_sql_quote):
-            return name # Quoting once is enough.
+        if self.connection.ops.dbms_type == 'tibero':
+            # SQL92 requires delimited (quoted) names to be case-sensitive.  When
+            # not quoted, Oracle/Tibero has case-insensitive behavior for identifiers, but
+            # always defaults to uppercase.
+            # We simplify things by making Oracle identifiers always uppercase.
+            if not name.startswith('"') and not name.endswith('"'):
+                name = '"%s"' % truncate_name(name, self.max_name_length())
+            # Oracle puts the query text into a (query % args) construct, so % signs
+            # in names need to be escaped. The '%%' will be collapsed back to '%' at
+            # that stage so we aren't really making the name longer here.
+            name = name.replace('%', '%%')
+            return name.upper()
+        else:
+            if name.startswith(self.left_sql_quote) and name.endswith(self.right_sql_quote):
+                return name # Quoting once is enough.
         return '%s%s%s' % (self.left_sql_quote, name, self.right_sql_quote)
 
     def random_function_sql(self):
