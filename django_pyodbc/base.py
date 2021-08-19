@@ -89,6 +89,8 @@ if DjangoVersion[:2] == (2, 0):
     _DJANGO_VERSION = 20
 elif DjangoVersion[:2] == (3, 1):
     _DJANGO_VERSION = 31
+elif DjangoVersion[:2] == (3, 2):
+    _DJANGO_VERSION = 32
 else:
     if DjangoVersion[0] == 1:
         raise ImproperlyConfigured("Django %d.%d " % DjangoVersion[:2] +
