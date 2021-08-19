@@ -280,6 +280,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self.features.supports_temporal_subtraction = True
             # Oracle doesn't ignore quoted identifiers case but the current backend
             # does by uppercasing all identifiers.
+            self.features.ignores_quoted_identifier_case = True
+            self.features.uppercases_column_names = True
             self.features.ignores_table_name_case = True
             self.features.supports_index_on_text_field = False
             self.features.has_case_insensitive_like = False
